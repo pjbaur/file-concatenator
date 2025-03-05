@@ -11,32 +11,35 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        // Get selected files from File Explorer
-        const selectedFiles = await vscode.window.showOpenDialog({
-            canSelectMany: true,
-            openLabel: 'Select Files to Concatenate',
-            canSelectFiles: true,
-            canSelectFolders: false
-        });
+        // Retrieve selected resources from the File Explorer
+        const selectedUris = await vscode.commands.executeCommand<vscode.Uri[]>('explorer.getSelection');
 
-        if (!selectedFiles || selectedFiles.length === 0) {
+        if (!selectedUris || selectedUris.length === 0) {
+            vscode.window.showInformationMessage('No files selected in Explorer.');
             return;
         }
 
         // Prepare concatenated content
         let concatenatedContent = '';
         
-        for (const fileUri of selectedFiles) {
+        for (const fileUri of selectedUris) {
             try {
+                // Check if it's a file (not a directory)
+                const stat = await vscode.workspace.fs.stat(fileUri);
+                if (stat.type !== vscode.FileType.File) {
+                    continue;
+                }
+
                 // Read file contents
-                const fileContents = fs.readFileSync(fileUri.fsPath, 'utf8');
+                const fileContents = await vscode.workspace.fs.readFile(fileUri);
+                const fileText = new TextDecoder().decode(fileContents);
                 
                 // Get relative path from workspace root
                 const relativePath = path.relative(workspaceFolder.uri.fsPath, fileUri.fsPath);
                 
                 // Add file path marker and contents
                 concatenatedContent += `%% ${relativePath} &&\n`;
-                concatenatedContent += fileContents + '\n';
+                concatenatedContent += fileText + '\n';
                 concatenatedContent += `%% end %%\n\n`;
             } catch (error) {
                 vscode.window.showErrorMessage(`Error reading file ${fileUri.fsPath}: ${error}`);

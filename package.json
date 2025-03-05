@@ -9,6 +9,10 @@
     "categories": [
         "Other"
     ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/pjbaur/file-concatenator"
+    },
     "activationEvents": [
         "onCommand:file-concatenator.copySelectedFiles"
     ],
