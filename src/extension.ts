@@ -42,10 +42,6 @@ export function activate(context: vscode.ExtensionContext) {
         
         log('Starting file concatenation');
 
-        // Log extension context details
-        log(`Storage Path: ${context.storageUri?.fsPath}`);
-        log(`Log File Path: ${logFilePath}`);
-
         // Get the currently open workspace folder
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
@@ -74,25 +70,14 @@ export function activate(context: vscode.ExtensionContext) {
             // Log available commands
             const commands = await vscode.commands.getCommands();
             log('Available Commands:');
-            commands.forEach(cmd => log(`  - ${cmd}`));
+            commands.filter(cmd => cmd.includes('explorer') || cmd.includes('file')).forEach(cmd => log(`  - ${cmd}`));
 
-            // Try various selection methods
+            // Attempt to get selection using alternative methods
             log('Attempting to get file selection');
 
-            // Method 1: Try context selection
-            try {
-                const contextSelection = await vscode.commands.executeCommand<vscode.Uri[]>('vscode.open');
-                if (contextSelection && contextSelection.length > 0) {
-                    log(`Context Selection: ${contextSelection.map(uri => uri.fsPath).join(', ')}`);
-                    selectedUris = contextSelection;
-                }
-            } catch (contextError) {
-                log(`Context selection error: ${contextError}`);
-            }
-
-            // Method 2: Fallback to file dialog
+            // If no files selected yet, prompt user
             if (selectedUris.length === 0) {
-                log('Falling back to file dialog');
+                log('No files selected. Showing file dialog.');
                 selectedUris = await vscode.window.showOpenDialog({
                     canSelectMany: true,
                     openLabel: 'Select Files to Concatenate'
@@ -117,6 +102,13 @@ export function activate(context: vscode.ExtensionContext) {
         
         for (const fileUri of selectedUris) {
             try {
+                // Verify it's a file
+                const stat = await vscode.workspace.fs.stat(fileUri);
+                if (stat.type !== vscode.FileType.File) {
+                    log(`Skipping non-file: ${fileUri.fsPath}`);
+                    continue;
+                }
+
                 // Read file contents
                 const fileContents = await vscode.workspace.fs.readFile(fileUri);
                 const fileText = new TextDecoder().decode(fileContents);
