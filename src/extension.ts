@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import * as path from 'path';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -11,11 +10,17 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        // Retrieve selected resources from the File Explorer
-        const selectedUris = await vscode.commands.executeCommand<vscode.Uri[]>('explorer.getSelection');
+        // Get the current active file explorer view
+        const activeTextEditor = vscode.window.activeTextEditor;
+        const selectedUris: vscode.Uri[] = activeTextEditor 
+            ? [activeTextEditor.document.uri] 
+            : await vscode.window.showOpenDialog({
+                canSelectMany: true,
+                openLabel: 'Select Files to Concatenate'
+            }) || [];
 
-        if (!selectedUris || selectedUris.length === 0) {
-            vscode.window.showInformationMessage('No files selected in Explorer.');
+        if (selectedUris.length === 0) {
+            vscode.window.showInformationMessage('No files selected.');
             return;
         }
 
@@ -24,12 +29,6 @@ export function activate(context: vscode.ExtensionContext) {
         
         for (const fileUri of selectedUris) {
             try {
-                // Check if it's a file (not a directory)
-                const stat = await vscode.workspace.fs.stat(fileUri);
-                if (stat.type !== vscode.FileType.File) {
-                    continue;
-                }
-
                 // Read file contents
                 const fileContents = await vscode.workspace.fs.readFile(fileUri);
                 const fileText = new TextDecoder().decode(fileContents);
