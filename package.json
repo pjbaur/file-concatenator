@@ -2,7 +2,7 @@
     "name": "file-concatenator",
     "displayName": "File Concatenator",
     "description": "Copy selected files' contents with file paths and markers",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "engines": {
         "vscode": "^1.85.0"
     },
@@ -23,7 +23,16 @@
                 "command": "file-concatenator.copySelectedFiles",
                 "title": "Concatenate Selected Files"
             }
-        ]
+        ],
+        "menus": {
+            "explorer/context": [
+                {
+                    "command": "file-concatenator.copySelectedFiles",
+                    "group": "1_modification",
+                    "when": "explorerResourceIsFolder == false"
+                }
+            ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
