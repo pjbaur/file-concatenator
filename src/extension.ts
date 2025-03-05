@@ -1,42 +1,116 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export function activate(context: vscode.ExtensionContext) {
+    // Create a channel for extension logs
+    const outputChannel = vscode.window.createOutputChannel('File Concatenator');
+    
+    // Create a log file in the extension's storage path
+    const createLogFile = (context: vscode.ExtensionContext) => {
+        const logFilePath = path.join(context.storageUri?.fsPath || '', 'debug.log');
+        
+        // Ensure storage directory exists
+        if (!fs.existsSync(context.storageUri?.fsPath || '')) {
+            fs.mkdirSync(context.storageUri?.fsPath || '', { recursive: true });
+        }
+
+        return logFilePath;
+    };
+
+    const logFilePath = createLogFile(context);
+
+    // Logging function that writes to both output channel and file
+    const log = (message: string) => {
+        const timestamp = new Date().toISOString();
+        const formattedMessage = `[${timestamp}] ${message}`;
+        
+        // Log to VS Code's Output panel
+        outputChannel.appendLine(formattedMessage);
+        
+        // Log to file
+        try {
+            fs.appendFileSync(logFilePath, formattedMessage + '\n');
+        } catch (error) {
+            console.error('Error writing to log file:', error);
+        }
+    };
+
     let disposable = vscode.commands.registerCommand('file-concatenator.copySelectedFiles', async () => {
+        // Clear previous logs
+        outputChannel.clear();
+        
+        log('Starting file concatenation');
+
+        // Log extension context details
+        log(`Storage Path: ${context.storageUri?.fsPath}`);
+        log(`Log File Path: ${logFilePath}`);
+
         // Get the currently open workspace folder
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
+            log('No workspace folder found');
             vscode.window.showErrorMessage('No workspace folder found.');
             return;
         }
 
+        // Log workspace details
+        log(`Workspace Folder: ${workspaceFolder.uri.fsPath}`);
+
         // Get selected URIs
         let selectedUris: vscode.Uri[] = [];
         
-        // Try to get selected files from the active text editor
+        // Log active text editor details
         const activeTextEditor = vscode.window.activeTextEditor;
         if (activeTextEditor) {
+            log(`Active Editor File: ${activeTextEditor.document.uri.fsPath}`);
             selectedUris.push(activeTextEditor.document.uri);
+        } else {
+            log('No active text editor');
         }
 
-        // Try to get selected files from the context
+        // Try different methods to get selected files
         try {
-            const contextSelection = await vscode.commands.executeCommand<vscode.Uri[]>('vscode.open');
-            if (contextSelection && contextSelection.length > 0) {
-                selectedUris = contextSelection;
+            // Log available commands
+            const commands = await vscode.commands.getCommands();
+            log('Available Commands:');
+            commands.forEach(cmd => log(`  - ${cmd}`));
+
+            // Try various selection methods
+            log('Attempting to get file selection');
+
+            // Method 1: Try context selection
+            try {
+                const contextSelection = await vscode.commands.executeCommand<vscode.Uri[]>('vscode.open');
+                if (contextSelection && contextSelection.length > 0) {
+                    log(`Context Selection: ${contextSelection.map(uri => uri.fsPath).join(', ')}`);
+                    selectedUris = contextSelection;
+                }
+            } catch (contextError) {
+                log(`Context selection error: ${contextError}`);
+            }
+
+            // Method 2: Fallback to file dialog
+            if (selectedUris.length === 0) {
+                log('Falling back to file dialog');
+                selectedUris = await vscode.window.showOpenDialog({
+                    canSelectMany: true,
+                    openLabel: 'Select Files to Concatenate'
+                }) || [];
+                
+                log(`File Dialog Selection: ${selectedUris.map(uri => uri.fsPath).join(', ')}`);
             }
         } catch (error) {
-            // Fallback to file dialog if context selection fails
-            selectedUris = await vscode.window.showOpenDialog({
-                canSelectMany: true,
-                openLabel: 'Select Files to Concatenate'
-            }) || [];
+            log(`Unexpected error getting file selection: ${error}`);
         }
 
         if (selectedUris.length === 0) {
+            log('No files selected');
             vscode.window.showInformationMessage('No files selected.');
             return;
         }
+
+        log(`Selected Files: ${selectedUris.map(uri => uri.fsPath).join(', ')}`);
 
         // Prepare concatenated content
         let concatenatedContent = '';
@@ -50,11 +124,15 @@ export function activate(context: vscode.ExtensionContext) {
                 // Get relative path from workspace root
                 const relativePath = path.relative(workspaceFolder.uri.fsPath, fileUri.fsPath);
                 
+                log(`Processing file: ${fileUri.fsPath}`);
+                log(`Relative path: ${relativePath}`);
+
                 // Add file path marker and contents
                 concatenatedContent += `%% ${relativePath} &&\n`;
                 concatenatedContent += fileText + '\n';
                 concatenatedContent += `%% end %%\n\n`;
             } catch (error) {
+                log(`Error reading file ${fileUri.fsPath}: ${error}`);
                 vscode.window.showErrorMessage(`Error reading file ${fileUri.fsPath}: ${error}`);
             }
         }
@@ -65,11 +143,16 @@ export function activate(context: vscode.ExtensionContext) {
             language: 'plaintext'
         });
         
+        log('Creating new document with concatenated content');
+
         // Show the new document
         await vscode.window.showTextDocument(newDocument);
+
+        log('File concatenation complete');
     });
 
     context.subscriptions.push(disposable);
+    context.subscriptions.push(outputChannel);
 }
 
 export function deactivate() {}
