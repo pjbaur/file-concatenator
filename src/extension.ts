@@ -36,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     };
 
-    let disposable = vscode.commands.registerCommand('file-concatenator.copySelectedFiles', async () => {
+    let disposable = vscode.commands.registerCommand('file-concatenator.copySelectedFiles', async (uri, selectedUris) => {
         // Clear previous logs
         outputChannel.clear();
         
@@ -52,9 +52,6 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Log workspace details
         log(`Workspace Folder: ${workspaceFolder.uri.fsPath}`);
-
-        // Get selected URIs
-        let selectedUris: vscode.Uri[] = [];
         
         // Log active text editor details
         const activeTextEditor = vscode.window.activeTextEditor;
@@ -65,42 +62,23 @@ export function activate(context: vscode.ExtensionContext) {
             log('No active text editor');
         }
 
-        // Try different methods to get selected files
-        try {
-            // Log available commands
-            const commands = await vscode.commands.getCommands();
-            log('Available Commands:');
-            commands.filter(cmd => cmd.includes('explorer') || cmd.includes('file')).forEach(cmd => log(`  - ${cmd}`));
+        // If multiple files are selected, selectedUris will contain all of them
+        // If only one file is selected, uri will contain that single file
+        const files = selectedUris || (uri ? [uri] : []);
 
-            // Attempt to get selection using alternative methods
-            log('Attempting to get file selection');
-
-            // If no files selected yet, prompt user
-            if (selectedUris.length === 0) {
-                log('No files selected. Showing file dialog.');
-                selectedUris = await vscode.window.showOpenDialog({
-                    canSelectMany: true,
-                    openLabel: 'Select Files to Concatenate'
-                }) || [];
-                
-                log(`File Dialog Selection: ${selectedUris.map(uri => uri.fsPath).join(', ')}`);
-            }
-        } catch (error) {
-            log(`Unexpected error getting file selection: ${error}`);
-        }
-
-        if (selectedUris.length === 0) {
+        if (!files.length) {
             log('No files selected');
-            vscode.window.showInformationMessage('No files selected.');
+            // Do I showInformationMessage or showErrorMessage?
+            vscode.window.showErrorMessage('No files selected.');
             return;
         }
 
-        log(`Selected Files: ${selectedUris.map(uri => uri.fsPath).join(', ')}`);
+        log(`Selected Files: ${files.map((file: vscode.Uri) => file.fsPath).join(', ')}`);
 
         // Prepare concatenated content
         let concatenatedContent = '';
         
-        for (const fileUri of selectedUris) {
+        for (const fileUri of files) {
             try {
                 // Verify it's a file
                 const stat = await vscode.workspace.fs.stat(fileUri);
